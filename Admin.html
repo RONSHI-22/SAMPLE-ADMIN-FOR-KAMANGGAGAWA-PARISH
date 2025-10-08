@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Admin Panel</title>
+  <link rel="icon" type="img/png" href="pictures/image 2(1) 1.png">
+  <link rel="stylesheet" href="admin.css">
+</head>
+<body>
+<h1>WEBSITE STAFF PERSONNEL (Admin Page)</h1>
+
+<div class="section">
+  <h3>Announcements</h3>
+  <textarea id="announcements" rows="5" cols="40" placeholder="Type announcements here..."></textarea><br>
+  <button id="saveAnnouncements">Save Announcements</button>
+  <button id="clearAnnouncements">Clear</button>
+</div>
+
+<div class="section">
+  <h3>Events</h3>
+  <textarea id="events" rows="5" cols="40" placeholder="Type events here..."></textarea><br>
+  <button id="saveEvents">Save Events</button>
+  <button id="clearEvents">Clear</button>
+</div>
+
+<div class="section">
+  <h3>Event Text Color</h3>
+  <input type="color" id="eventTextColor" value="#ffffff"><br>
+  <button id="saveEventTextColor">Save Text Color</button>
+</div>
+
+<div class="section">
+  <h3>Verse</h3>
+  <textarea id="verse" rows="3" cols="40" placeholder="Type verse here..."></textarea><br>
+  <h4>Verse Author / Name</h4>
+  <input type="text" id="verseName" placeholder="Enter name"><br>
+  <button id="saveVerse">Save Verse</button>
+  <button id="clearVerse">Clear</button>
+</div>
+
+<hr>
+
+<div class="section">
+  <h3>Manage Priests and Staff</h3>
+
+  <input type="hidden" id="priestId">
+
+  <input type="text" id="priestName" placeholder="Priest Name"><br>
+  <textarea id="priestDescription" rows="3" cols="40" placeholder="Priest Description"></textarea><br>
+  <input type="file" id="priestImage" accept="image/*"><br>
+
+  <button id="savePriest">Save Priest</button>
+  <button id="updatePriest" style="display:none;">Update Priest</button>
+  <button id="cancelEdit" style="display:none;">Cancel</button>
+
+  <hr>
+  <h4>Priest List</h4>
+  <div id="priestList"></div>
+</div>
+
+<script>
+  const announcements = document.getElementById("announcements");
+  const events = document.getElementById("events");
+  const eventTextColor = document.getElementById("eventTextColor");
+  const verse = document.getElementById("verse");
+  const verseName = document.getElementById("verseName");
+
+  const priestId = document.getElementById("priestId");
+  const priestName = document.getElementById("priestName");
+  const priestDescription = document.getElementById("priestDescription");
+  const priestImageInput = document.getElementById("priestImage");
+  const priestList = document.getElementById("priestList");
+
+  // Load saved content from MongoDB
+  async function loadContent() {
+    try {
+      const res = await fetch("/getContent");
+      const data = await res.json();
+
+      announcements.value = data.announcements || "";
+      events.value = data.events || "";
+      eventTextColor.value = data.eventTextColor || "#ffffff";
+      verse.value = data.verse || "";
+      verseName.value = data.verseName || "";
+    } catch (err) {
+      console.error("Error loading content:", err);
+    }
+  }
+  loadContent();
+
+  // Save all content
+  async function saveContent() {
+    const body = {
+      announcements: announcements.value,
+      events: events.value,
+      eventTextColor: eventTextColor.value,
+      verse: verse.value,
+      verseName: verseName.value
+    };
+
+    try {
+      const res = await fetch("/saveContent", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body)
+      });
+      const result = await res.json();
+      alert(result.message || "Saved!");
+    } catch (err) {
+      alert("Error saving: " + err.message);
+    }
+  }
+
+  // Save buttons
+  document.getElementById("saveAnnouncements").addEventListener("click", saveContent);
+  document.getElementById("saveEvents").addEventListener("click", saveContent);
+  document.getElementById("saveEventTextColor").addEventListener("click", saveContent);
+  document.getElementById("saveVerse").addEventListener("click", saveContent);
+
+  // Clear buttons
+  document.getElementById("clearAnnouncements").addEventListener("click", async () => {
+    announcements.value = "";
+    await saveContent();
+  });
+
+  document.getElementById("clearEvents").addEventListener("click", async () => {
+    events.value = "";
+    await saveContent();
+  });
+
+  document.getElementById("clearVerse").addEventListener("click", async () => {
+    verse.value = "";
+    verseName.value = "";
+    await saveContent();
+  });
+
+  // -------------------
+  // Priest CRUD Section
+  // -------------------
+
+  async function loadPriests() {
+    const res = await fetch("/getPriests");
+    const priests = await res.json();
+    priestList.innerHTML = "";
+
+    priests.forEach(p => {
+      const div = document.createElement("div");
+      div.className = "priest-item";
+      div.innerHTML = `
+        <img src="${p.image}" width="100" style="border-radius:8px;">
+        <strong>${p.name}</strong><br>
+        <small>${p.description}</small><br>
+        <button onclick="editPriest('${p._id}')">Edit</button>
+        <button onclick="deletePriest('${p._id}')">Delete</button>
+        <hr>
+      `;
+      priestList.appendChild(div);
+    });
+  }
+  loadPriests();
+
+  document.getElementById("savePriest").addEventListener("click", () => {
+    const file = priestImageInput.files[0];
+    if (!file) return alert("Please choose an image!");
+
+    const reader = new FileReader();
+    reader.onload = async function (e) {
+      const priestData = {
+        name: priestName.value,
+        description: priestDescription.value,
+        image: e.target.result
+      };
+
+      await fetch("/addPriest", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(priestData)
+      });
+      alert("Priest added!");
+      resetForm();
+      loadPriests();
+    };
+    reader.readAsDataURL(file);
+  });
+
+  async function editPriest(id) {
+    const res = await fetch(`/getPriest/${id}`);
+    const priest = await res.json();
+
+    priestId.value = priest._id;
+    priestName.value = priest.name;
+    priestDescription.value = priest.description;
+
+    document.getElementById("savePriest").style.display = "none";
+    document.getElementById("updatePriest").style.display = "inline-block";
+    document.getElementById("cancelEdit").style.display = "inline-block";
+  }
+
+  document.getElementById("updatePriest").addEventListener("click", async () => {
+    let imageBase64 = null;
+    if (priestImageInput.files.length > 0) {
+      const file = priestImageInput.files[0];
+      const reader = new FileReader();
+      reader.onload = async (e) => {
+        imageBase64 = e.target.result;
+        await sendUpdate(imageBase64);
+      };
+      reader.readAsDataURL(file);
+    } else {
+      await sendUpdate(null);
+    }
+  });
+
+  async function sendUpdate(imageBase64) {
+    const priestData = {
+      name: priestName.value,
+      description: priestDescription.value
+    };
+    if (imageBase64) priestData.image = imageBase64;
+
+    await fetch(`/updatePriest/${priestId.value}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(priestData)
+    });
+    alert("Priest updated!");
+    resetForm();
+    loadPriests();
+  }
+
+  async function deletePriest(id) {
+    if (!confirm("Are you sure?")) return;
+    await fetch(`/deletePriest/${id}`, { method: "DELETE" });
+    alert("Priest deleted!");
+    loadPriests();
+  }
+
+  document.getElementById("cancelEdit").addEventListener("click", resetForm);
+
+  function resetForm() {
+    priestId.value = "";
+    priestName.value = "";
+    priestDescription.value = "";
+    priestImageInput.value = "";
+    document.getElementById("savePriest").style.display = "inline-block";
+    document.getElementById("updatePriest").style.display = "none";
+    document.getElementById("cancelEdit").style.display = "none";
+  }
+</script>
+
+
+
+
+</body>
+</html>
